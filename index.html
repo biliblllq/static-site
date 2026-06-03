@@ -1,1 +1,66 @@
-hi
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bookmarks</title>
+  <style>body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+       max-width: 540px; margin: 32px auto; padding: 0 16px; color: #222; }
+h1 { font-weight: 500; }
+.card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 16px 0; }
+.primary-url { font-size: 18px; word-break: break-all; }
+.btn { display: inline-block; padding: 8px 16px; border-radius: 4px;
+       background: #2080f0; color: white; text-decoration: none; cursor: pointer;
+       border: none; font-size: 14px; }
+.btn-warning { background: #f0a020; }
+.muted { color: #888; font-size: 12px; }
+.error { color: #c00; }
+input, textarea { width: 100%; padding: 8px; border: 1px solid #ccc;
+                  border-radius: 4px; font: inherit; box-sizing: border-box; }
+.row { margin: 8px 0; }
+</style>
+</head>
+<body>
+  <main id="app">
+    <h1>Bookmarks</h1>
+    <section id="import-panel" hidden>
+      <div class="card">
+        <h3>导入密钥</h3>
+        <div class="row">
+          <textarea id="bootstrap-input" rows="6" placeholder="粘贴 bootstrap 文件 / JSON"></textarea>
+        </div>
+        <div class="row">
+          <input id="passphrase-input" type="password" placeholder="口令" />
+        </div>
+        <div class="row">
+          <button class="btn" id="import-btn">导入</button>
+        </div>
+        <p class="muted" id="import-error"></p>
+      </div>
+    </section>
+    <section id="result-panel" hidden>
+      <div class="card">
+        <div class="muted">当前真实入口</div>
+        <div class="primary-url" id="primary-url">—</div>
+        <div class="row">
+          <a class="btn" id="goto-btn" href="#">一键跳转</a>
+        </div>
+        <div class="muted" id="meta">—</div>
+      </div>
+      <div class="card">
+        <div class="muted">备用入口</div>
+        <ul id="fallback-list"></ul>
+      </div>
+      <div class="row">
+        <button class="btn" id="refresh-btn">刷新</button>
+        <button class="btn btn-warning" id="reset-btn">切换密钥</button>
+      </div>
+    </section>
+    <p class="error" id="error-msg"></p>
+  </main>
+  <script>(()=>{function w(t){let e=atob(t),n=new Uint8Array(e.length);for(let o=0;o<e.length;o++)n[o]=e.charCodeAt(o);return n}async function O(t){return crypto.subtle.importKey("raw",t,"AES-GCM",!1,["encrypt","decrypt"])}async function _(t,e){if(t.length!==32)throw new Error("key must be 32 bytes");if(e.length<28)throw new Error("wire too short");let n=e.slice(0,12),o=e.slice(12),r=await O(t),a=await crypto.subtle.decrypt({name:"AES-GCM",iv:n,tagLength:16*8},r,o);return new Uint8Array(a)}async function K(t,e,n,o){let r=await crypto.subtle.importKey("raw",new TextEncoder().encode(t),"PBKDF2",!1,["deriveBits"]),a=await crypto.subtle.deriveBits({name:"PBKDF2",salt:e,iterations:n,hash:"SHA-256"},r,o*8);return new Uint8Array(a)}async function x(t,e){let n=JSON.parse(e);if(n.v!==1)throw new Error("unsupported bootstrap version: "+n.v);if(n.alg!=="pbkdf2-sha256")throw new Error("unsupported alg: "+n.alg);let o=w(n.salt),r=await K(t,o,n.params.iter,32),a=w(n.blob),c=await _(r,a);return JSON.parse(new TextDecoder().decode(c))}async function A(t,e){let n=w(e),o=await _(t,n),r=JSON.parse(new TextDecoder().decode(o));if(r.v!==1)throw new Error("unsupported payload version: "+r.v);let a=r.counter;if(!Number.isInteger(a)||a<0||a>=9007199254740992)throw new Error("counter out of range: "+a);return r}var U="bookmarks-store";var I=new Set(["github_pages","jsdelivr","cf_pages","cf_worker","dns_txt","npm_unpkg","npm_jsdelivr","ipfs_4everland","ipfs_dweb","pypi_files","go_proxy_cn","go_proxy_official"]);function R(t){if(!Array.isArray(t))throw new Error("channels must be an array");if(t.length>32)throw new Error("too many channels: "+t.length+" > 32");for(let e of t){if(!e||typeof e!="object")throw new Error("channel must be an object");if(!I.has(e.type))throw new Error("unknown channel type: "+e.type);let n=typeof e.url=="string"&&e.url.startsWith("https://"),o=typeof e.domain=="string"&&e.domain.length>0;if(!n&&!o)throw new Error("channel needs https:// url or non-empty domain")}return t}function h(){return new Promise((t,e)=>{let n=indexedDB.open(U,1);n.onupgradeneeded=()=>{let o=n.result;o.objectStoreNames.contains("kv")||o.createObjectStore("kv")},n.onsuccess=()=>t(n.result),n.onerror=()=>e(n.error)})}async function d(t){let e=await h();return new Promise((n,o)=>{let r=e.transaction("kv").objectStore("kv").get(t);r.onsuccess=()=>n(r.result),r.onerror=()=>o(r.error)})}async function y(t,e){let n=await h();return new Promise((o,r)=>{let a=n.transaction("kv","readwrite").objectStore("kv").put(e,t);a.onsuccess=()=>o(),a.onerror=()=>r(a.error)})}async function N(t){let e=await h();return new Promise((n,o)=>{let r=e.transaction("kv","readwrite").objectStore("kv").delete(t);r.onsuccess=()=>n(),r.onerror=()=>o(r.error)})}async function m(){return d("key")}async function k(t){return y("key",t)}async function b(){return d("channels")}async function g(t){return y("channels",R(t))}async function C(t){return await d("counter:"+t)??0}async function S(t,e){return y("counter:"+t,e)}async function T(){await N("key"),await N("channels")}var L=5e3,f=20971520,v=64,D=f;async function $(t,e){let n=t.headers.get("content-length");if(n!==null){let s=Number(n);if(Number.isFinite(s)&&s>f)throw new Error(`response body too large: ${s} > ${f}`)}let o=t.body;if(!o||!o.getReader){let s=new Uint8Array(await t.arrayBuffer());if(s.length>f)throw new Error(`response body too large: ${s.length} > ${f}`);return new TextDecoder().decode(s)}let r=o.getReader(),a=[],c=0;try{for(;;){let{done:s,value:p}=await r.read();if(s)break;if(p){if(c+=p.length,c>f)throw e.abort(),new Error(`response body too large: ${c} > ${f}`);a.push(p)}}}finally{r.cancel().catch(()=>{})}let l=new Uint8Array(c),u=0;for(let s of a)l.set(s,u),u+=s.length;return new TextDecoder().decode(l)}async function X(t){let e=new AbortController,n=setTimeout(()=>e.abort(),L);try{let o=await fetch(t,{signal:e.signal,cache:"no-store"});if(!o.ok)throw new Error("HTTP "+o.status);return JSON.parse(await $(o,e)).data}finally{clearTimeout(n)}}async function J(t){let e=`https://1.1.1.1/dns-query?name=${encodeURIComponent(t)}&type=TXT`,n=new AbortController,o=setTimeout(()=>n.abort(),L);try{let r=await fetch(e,{headers:{Accept:"application/dns-json"},signal:n.signal,cache:"no-store"});if(!r.ok)throw new Error("DoH HTTP "+r.status);let a=JSON.parse(await $(r,n));if(!Array.isArray(a.Answer))return"";if(a.Answer.length>v)throw new Error(`too many DoH answers: ${a.Answer.length} > ${v}`);let c=[],l=0;for(let u of a.Answer){let s=u.data;if(typeof s!="string")continue;s.startsWith('"')&&s.endsWith('"')&&(s=s.slice(1,-1));let p=s.match(/^m(\d+)=(.*)$/);if(p){if(l+=p[2].length,l>D)throw new Error(`DoH TXT payload too large: ${l} > ${D}`);c.push({idx:parseInt(p[1]),part:p[2]})}}return c.sort((u,s)=>u.idx-s.idx),c.map(u=>u.part).join("")}finally{clearTimeout(o)}}async function j(t,e,n){let o=[],r=await C(n);for(let a of e)try{let c=a.type==="dns_txt"?await J(a.domain):await X(a.url);if(!c)throw new Error("empty payload");let l=await A(t,c);if(l.counter<=r){o.push({channel:a.type,error:`stale counter ${l.counter} <= ${r}`});continue}return await S(n,l.counter),{payload:l,channelId:a.type}}catch(c){o.push({channel:a.type,error:c.message??String(c)})}throw new Error(`all channels failed:
+`+o.map(a=>`  ${a.channel}: ${a.error}`).join(`
+`))}var i=t=>document.getElementById(t),P=i("import-panel"),B=i("result-panel"),H=i("error-msg");function M(){P.hidden=!1,B.hidden=!0}function G(){P.hidden=!0,B.hidden=!1}async function Y(){let t=await m(),e=await b();if(!t||!e){M();return}await E()}async function E(){H.textContent="";let t=await m(),e=await b(),n=await crypto.subtle.digest("SHA-256",t),o=Array.from(new Uint8Array(n).slice(0,4)).map(r=>r.toString(16).padStart(2,"0")).join("");try{let{payload:r,channelId:a}=await j(t,e,o);F(r,a),G(),r.next_channels&&JSON.stringify(r.next_channels)!==JSON.stringify(e)&&await g(r.next_channels)}catch(r){H.textContent="\u6240\u6709\u901A\u9053\u5931\u8D25\uFF1A"+r.message}}function W(t){if(!t||typeof t!="string")return"#";try{let e=new URL(t,location.href).protocol;return e==="https:"||e==="http:"?t:"#"}catch{return"#"}}function F(t,e){i("primary-url").textContent=t.data?.primary??"(no primary)",i("goto-btn").href=W(t.data?.primary),i("meta").textContent=`\u66F4\u65B0\u4E8E ${t.ts} \xB7 counter ${t.counter} \xB7 \u547D\u4E2D\u901A\u9053 ${e}`;let n=i("fallback-list");n.innerHTML="";for(let o of t.data?.fallback??[]){let r=document.createElement("li");r.textContent=o,n.appendChild(r)}}i("import-btn").onclick=async()=>{let t=i("bootstrap-input").value.trim(),e=i("passphrase-input").value;i("import-error").textContent="";try{let n=await x(e,t);await k(w(n.aes_key)),await g(n.channels),await E()}catch(n){i("import-error").textContent="\u5BFC\u5165\u5931\u8D25\uFF1A"+(n.message??n)}};i("refresh-btn").onclick=E;i("reset-btn").onclick=async()=>{await T(),M(),i("bootstrap-input").value="",i("passphrase-input").value=""};Y();})();
+</script>
+</body>
+</html>
